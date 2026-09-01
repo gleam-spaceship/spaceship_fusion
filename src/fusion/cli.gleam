@@ -1,4 +1,5 @@
 import fusion/build
+import fusion/date
 import gleam/io
 import gleam/list
 import gleam/option.{None}
@@ -136,10 +137,7 @@ fn generate_wrangler_toml(wrangler: String) -> String {
     "latest" -> "3"
     v -> v
   }
-  "name = \"app\"\nmain = \"build/dist/index.js\"\ncompatibility_date = \"2024-09-23\"\ncompatibility_flags = [\"nodejs_compat\"]\n"
-  <> "wrangler = \""
-  <> version
-  <> "\"\n\n[assets]\ndirectory = \"public\"\nbinding = \"ASSETS\"\n"
+  "name = \"app\"\nmain = \"build/dist/index.js\"\ncompatibility_date = \"" <> date.today() <> "\"\ncompatibility_flags = [\"nodejs_compat\"]\nwrangler = \"" <> version <> "\"\n\n[assets]\ndirectory = \"public\"\nbinding = \"ASSETS\"\n"
 }
 
 pub fn class_create_cmd() -> glint.Command(Nil) {

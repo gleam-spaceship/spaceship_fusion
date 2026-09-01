@@ -1,5 +1,5 @@
 -module(dev_ffi).
--export([run_command/2, run_command_in/3]).
+-export([run_command/2, run_command_in/3, get_today/0]).
 
 run_command(Cmd, Args) ->
     run_command_in(Cmd, Args, ".").
@@ -37,3 +37,10 @@ command_result(Output, FullCmd) ->
 to_list(Data) when is_binary(Data) -> binary_to_list(Data);
 to_list(Data) when is_list(Data) -> Data;
 to_list(Data) -> lists:flatten(io_lib:format("~p", [Data])).
+
+get_today() ->
+    Timestamp = erlang:timestamp(),
+    {Date, _Time} = calendar:now_to_universal_time(Timestamp),
+    {Year, Month, Day} = Date,
+    Formatted = io_lib:format("~4..0B-~2..0B-~2..0B", [Year, Month, Day]),
+    unicode:characters_to_binary(Formatted).
