@@ -44,27 +44,23 @@ run_background(Cmd, Args, Cwd) ->
     CmdStr = to_list(Cmd),
     FilteredArgs = ["\"" ++ A ++ "\"" || A <- ArgsList, A =/= ""],
     FullCmd = "cd " ++ CwdStr ++ " && " ++ CmdStr ++ " " ++ string:join(FilteredArgs, " "),
-    try
-        Port = open_port({spawn, "/bin/sh -c '" ++ FullCmd ++ "'"}, [exit_status, stream, {line, 200}]),
-        port_loop(Port)
-    catch
-        error:Reason ->
-            Msg = iolist_to_binary(io_lib:format("~p", [Reason])),
-            {error, iolist_to_binary([<<"Failed: ">>, iolist_to_binary(FullCmd), <<" - ">>, Msg])}
-    end.
+    Port = open_port({spawn, "/bin/sh -c '" ++ FullCmd ++ "'"}, [exit_status, {line, 1024}, eof]),
+    port_loop(Port, <<>>).
 
-port_loop(Port) ->
+port_loop(Port, Acc) ->
     receive
-        {Port, {data, {_, Data}}} ->
-            io:format("~s", [Data]),
-            port_loop(Port);
+        {Port, {data, {eol, Data}}} ->
+            io:format("~ts~n", [Data]),
+            port_loop(Port, Acc);
+        {Port, {data, {noeol, Data}}} ->
+            io:format("~ts", [Data]),
+            port_loop(Port, Acc);
+        {Port, eof} ->
+            {ok, Acc};
         {Port, {exit_status, 0}} ->
-            {ok, <<>>};
+            {ok, Acc};
         {Port, {exit_status, Status}} ->
             {error, iolist_to_binary(io_lib:format("Process exited with status ~p", [Status]))}
-    after
-        30000 ->
-            {ok, <<>>}
     end.
 
 get_today() ->
