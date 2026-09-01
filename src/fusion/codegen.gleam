@@ -46,14 +46,15 @@ fn generate_class_file(class: ClassDef, package_name: String) -> String {
 fn generate_imports(class: ClassDef, package_name: String) -> String {
   let parent_import = case class.extends {
     None -> ""
-    Some(Extends(name:, from:)) -> [
-      "import { ",
-      name,
-      " } from \"",
-      from,
-      "\";",
-    ]
-    |> string.join("")
+    Some(Extends(name:, from:)) ->
+      [
+        "import { ",
+        name,
+        " } from \"",
+        from,
+        "\";",
+      ]
+      |> string.join("")
   }
 
   let function_import = case class.methods {

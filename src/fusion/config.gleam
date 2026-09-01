@@ -302,14 +302,15 @@ fn config_to_json(config: FusionConfig) -> String {
 fn class_to_json(class: ClassDef) -> String {
   let extends_json = case class.extends {
     None -> "null"
-    Some(ext) -> [
-      "{ \"name\": ",
-      escape_json_string(ext.name),
-      ", \"from\": ",
-      escape_json_string(ext.from),
-      " }",
-    ]
-    |> string.join("")
+    Some(ext) ->
+      [
+        "{ \"name\": ",
+        escape_json_string(ext.name),
+        ", \"from\": ",
+        escape_json_string(ext.from),
+        " }",
+      ]
+      |> string.join("")
   }
 
   let methods_json = list.map(class.methods, method_to_json)

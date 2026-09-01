@@ -36,15 +36,16 @@ fn generate_wrangler_toml(
   package_name: String,
 ) -> Result(Nil, String) {
   let toml_path = filepath.join(project_root, "wrangler.toml")
-  let content = [
-    "name = \"" <> package_name <> "\"",
-    "main = \"build/dist/index.js\"",
-    "compatibility_date = \"" <> get_compatibility_date() <> "\"",
-    "[assets]",
-    "directory = \"build/static\"",
-    "binding = \"ASSETS\"",
-  ]
-  |> string.join("\n")
+  let content =
+    [
+      "name = \"" <> package_name <> "\"",
+      "main = \"build/dist/index.js\"",
+      "compatibility_date = \"" <> get_compatibility_date() <> "\"",
+      "[assets]",
+      "directory = \"build/static\"",
+      "binding = \"ASSETS\"",
+    ]
+    |> string.join("\n")
 
   simplifile.write(toml_path, content)
   |> result.map_error(fn(_) { "Failed to write wrangler.toml" })
@@ -61,16 +62,17 @@ fn cloudflare_shim(
   entry_point: String,
   classes: List(ClassDef),
 ) -> String {
-  let app_import = [
-    "import { ",
-    entry_point,
-    " } from \"../dev/javascript/",
-    package_name,
-    "/",
-    package_name,
-    ".mjs\";",
-  ]
-  |> string.join("")
+  let app_import =
+    [
+      "import { ",
+      entry_point,
+      " } from \"../dev/javascript/",
+      package_name,
+      "/",
+      package_name,
+      ".mjs\";",
+    ]
+    |> string.join("")
 
   let class_imports =
     list.filter_map(classes, fn(class) {
@@ -81,29 +83,32 @@ fn cloudflare_shim(
             [] -> class.source_file
             parts -> list.last(parts) |> result.unwrap(class.source_file)
           }
-          Ok([
-            "import { ",
-            class.name,
-            " } from \"./classes/",
-            filename,
-            ".mjs\";",
-          ]
-          |> string.join(""))
+          Ok(
+            [
+              "import { ",
+              class.name,
+              " } from \"./classes/",
+              filename,
+              ".mjs\";",
+            ]
+            |> string.join(""),
+          )
         }
         False -> Error(Nil)
       }
     })
 
-  let default_export = [
-    "export default {",
-    "  async fetch(req, env, ctx) {",
-    "    globalThis.__env = env;",
-    "    globalThis.__ctx = ctx;",
-    "    return " <> entry_point <> "(req, env, ctx);",
-    "  }",
-    "};",
-  ]
-  |> string.join("\n")
+  let default_export =
+    [
+      "export default {",
+      "  async fetch(req, env, ctx) {",
+      "    globalThis.__env = env;",
+      "    globalThis.__ctx = ctx;",
+      "    return " <> entry_point <> "(req, env, ctx);",
+      "  }",
+      "};",
+    ]
+    |> string.join("\n")
 
   let named_exports = case
     list.filter_map(classes, fn(class) {

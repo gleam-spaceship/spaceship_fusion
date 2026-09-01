@@ -12,23 +12,103 @@ A build tool for Gleam projects that generates platform-specific shims, compiles
 - Bundle with esbuild with source map support
 - Configurable entry point function
 - Generate `wrangler.toml` for Cloudflare Workers
+- Initialize projects with `fusion init`
 
-## Usage
+## Installation
 
 ```sh
 gleam add spaceship_fusion
 ```
 
-### Build a project
+## CLI Commands
+
+### `fusion init`
+
+Initialize a new project for fusion.
+
+```bash
+# Basic (Node runtime)
+gleam run -m fusion -- init
+
+# Cloudflare
+gleam run -m fusion -- init --cloudflare
+
+# Cloudflare with specific wrangler version
+gleam run -m fusion -- init --cloudflare --wrangler=2
+```
+
+**What it does:**
+1. Edits `gleam.toml` with `[fusion]` section
+2. For `--cloudflare`: generates `wrangler.toml` with D1 binding
+
+**Flags:**
+| Flag | Description | Default |
+|---|---|---|
+| `--cloudflare` | Target Cloudflare Workers | `false` |
+| `--wrangler=<ver>` | Wrangler version (cloudflare only) | `"latest"` |
+
+### `fusion build`
+
+Build the project.
 
 ```sh
 gleam run -m fusion -- build
 ```
 
-### Scan class files
+**What it does:**
+1. Scans `src/classes/` for class `.gleam` files
+2. Runs `gleam build --target javascript`
+3. Generates class adapter files in `build/fusion/classes/`
+4. Generates platform-specific `shim.js`
+5. Bundles with esbuild to `build/dist/index.js`
+
+### `fusion scan`
+
+Scan class files and display metadata.
 
 ```sh
 gleam run -m fusion -- scan
+```
+
+### `fusion dev`
+
+Start development mode with file watching.
+
+```sh
+gleam run -m fusion -- dev
+```
+
+**What it does:**
+1. Runs full build
+2. Starts appropriate server based on runtime:
+   - `node` → runs `node build/fusion/shim.js`
+   - `cloudflare` → runs `npx wrangler dev`
+
+### `fusion class create <name>`
+
+Create a new class file.
+
+```bash
+gleam run -m fusion -- class create "greeter"
+```
+
+**What it does:**
+1. Creates `src/classes/` if it doesn't exist
+2. Creates `src/classes/<name>.gleam` with template
+
+### `fusion class list`
+
+List all class files.
+
+```sh
+gleam run -m fusion -- class list
+```
+
+**Output:**
+```
+Found 1 class(es)
+  Greeter (classes/greeter)
+    .greet(message: String)
 ```
 
 ## Configuration
@@ -102,4 +182,5 @@ build/
 ```sh
 gleam build   # Build the project
 gleam test    # Run the tests
+gleam format  # Format the code
 ```
