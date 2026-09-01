@@ -171,101 +171,29 @@ fn cloudflare_shim(
 }
 
 fn node_shim(package_name: String, entry_point: String) -> String {
-  "import http from \"node:http\";
-import fs from \"node:fs/promises\";
-import { Get, Post, Put, Delete, Patch, Head, Options } from \"../dev/javascript/gleam_http/gleam/http.mjs\";
-import { BitArray } from \"../dev/javascript/prelude.mjs\";
-import { " <> entry_point <> " } from \"../dev/javascript/" <> package_name <> "/" <> package_name <> ".mjs\";
-
-const METHOD_MAP = { GET: Get, POST: Post, PUT: Put, DELETE: Delete, PATCH: Patch, HEAD: Head, OPTIONS: Options };
-
-function toGleamMethod(method) {
-  const C = METHOD_MAP[method];
-  if (C) return new C();
-  return { tag: \"Other\", 0: method };
-}
-
-function gleamList(arr) {
-  let list = { head: undefined, tail: undefined };
-  for (let i = arr.length - 1; i >= 0; i--) {
-    list = { head: arr[i], tail: list };
-  }
-  return list;
-}
-
-function gleamHeaders(req) {
-  const headers = [];
-  for (const [key, value] of Object.entries(req.headers)) {
-    headers.push([key, value]);
-  }
-  return gleamList(headers);
-}
-
-async function serveStatic(pathname, res) {
-  if (!pathname.startsWith(\"/assets/\")) return false;
-
-  const relative = pathname.slice(\"/assets/\".length);
-  if (relative === \"\" || relative.includes(\"..\")) {
-    res.writeHead(404);
-    res.end(\"Not Found\");
-    return true;
-  }
-
-  try {
-    const file = await fs.readFile(new URL(\"../static/\" + relative, import.meta.url));
-    const contentType = relative.endsWith(\".js\")
-      ? \"application/javascript; charset=utf-8\"
-      : relative.endsWith(\".css\")
-        ? \"text/css; charset=utf-8\"
-        : relative.endsWith(\".map\")
-          ? \"application/json; charset=utf-8\"
-          : \"application/octet-stream\";
-    res.writeHead(200, { \"content-type\": contentType });
-    res.end(file);
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, \"http://localhost\");
-  if (await serveStatic(url.pathname, res)) return;
-
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  const body = new Uint8Array(Buffer.concat(chunks));
-
-  const path = url.pathname;
-  const query = url.search ? url.search.substring(1) : \"\";
-
-  const gleamReq = {
-    method: toGleamMethod(req.method),
-    headers: gleamHeaders(req),
-    path: path,
-    query: query,
-    body: new BitArray(body),
-  };
-
-  try {
-    const response = " <> entry_point <> "(gleamReq);
-    const respHeaders = {};
-    let h = response.headers;
-    while (h && h.head) {
-      const [k, v] = h.head;
-      respHeaders[k] = v;
-      h = h.tail;
-    }
-    res.writeHead(response.status, respHeaders);
-    res.end(Buffer.from(response.body.buffer || response.body));
-  } catch (e) {
-    console.error(e);
-    res.writeHead(500);
-    res.end(\"Internal Server Error\");
-  }
-});
-
-server.listen(3000, () => console.log(\"Server running on http://localhost:3000\"));"
+  [
+    "import http from \"node:http\";",
+    "import { ",
+    entry_point,
+    " } from \"../dev/javascript/",
+    package_name,
+    "/",
+    package_name,
+    ".mjs\";",
+    "import { toGleamRequest, toPlatformResponse } from \"./adapter.mjs\";",
+    "",
+    "const server = http.createServer((req, res) => {",
+    "  const gleamReq = toGleamRequest(req);",
+    "  const resp = " <> entry_point <> "(gleamReq, null, null);",
+    "  toPlatformResponse(resp, res);",
+    "});",
+    "",
+    "const port = process.env.PORT || 3000;",
+    "server.listen(port, () => {",
+    "  console.log(\"Server listening on http://localhost:\" + port);",
+    "});",
+  ]
+  |> string.join("\n")
 }
 
 fn bun_shim(package_name: String, entry_point: String) -> String {
@@ -277,8 +205,16 @@ fn bun_shim(package_name: String, entry_point: String) -> String {
     "/",
     package_name,
     ".mjs\";",
+    "import { toGleamRequest, toPlatformResponse } from \"./adapter.mjs\";",
     "",
-    "Bun.serve({ port: 3000, fetch: " <> entry_point <> " });",
+    "Bun.serve({",
+    "  port: 3000,",
+    "  async fetch(req) {",
+    "    const gleamReq = toGleamRequest(req);",
+    "    const resp = " <> entry_point <> "(gleamReq, null, null);",
+    "    return toPlatformResponse(resp);",
+    "  }",
+    "});",
   ]
   |> string.join("\n")
 }
@@ -292,8 +228,13 @@ fn deno_shim(package_name: String, entry_point: String) -> String {
     "/",
     package_name,
     ".mjs\";",
+    "import { toGleamRequest, toPlatformResponse } from \"./adapter.mjs\";",
     "",
-    "Deno.serve({ port: 3000 }, " <> entry_point <> ");",
+    "Deno.serve({ port: 3000 }, async (req) => {",
+    "  const gleamReq = toGleamRequest(req);",
+    "  const resp = " <> entry_point <> "(gleamReq, null, null);",
+    "  return toPlatformResponse(resp);",
+    "});",
   ]
   |> string.join("\n")
 }
