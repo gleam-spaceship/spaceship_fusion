@@ -54,7 +54,9 @@ port_loop(Port) ->
             io:format("~ts", [Data]),
             port_loop(Port);
         {Port, eof} ->
-            {ok, <<>>};
+            % EOF can arrive before the child reports its exit status.
+            % Keep the port open so long-running servers are not orphaned.
+            port_loop(Port);
         {Port, {exit_status, 0}} ->
             {ok, <<>>};
         {Port, {exit_status, Status}} ->
