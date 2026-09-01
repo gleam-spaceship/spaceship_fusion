@@ -16,7 +16,7 @@ pub fn generate_shim(
   let shim_path = filepath.join(shim_dir, "shim.js")
 
   // Copy adapter to build output with corrected paths
-  let _ = copy_adapter(project_root)
+  let _ = copy_adapter(project_root, config.runtime)
 
   let content = case config.runtime {
     "cloudflare" -> {
@@ -34,10 +34,10 @@ pub fn generate_shim(
 }
 
 /// Copy adapter.mjs from spaceship_helm to build output with corrected paths
-fn copy_adapter(project_root: String) -> Result(Nil, String) {
+fn copy_adapter(project_root: String, runtime: String) -> Result(Nil, String) {
   // Find spaceship_helm in workspace (look for sibling directory)
   let workspace_root = filepath.join(project_root, "../..")
-  let adapter_src = filepath.join(workspace_root, "spaceship_helm/ffi/runtimes/cloudflare.mjs")
+  let adapter_src = filepath.join(workspace_root, "spaceship_helm/ffi/runtimes/" <> runtime <> ".mjs")
   let adapter_dst = filepath.join(project_root, "build/fusion/adapter.mjs")
   
   case simplifile.read(adapter_src) {
