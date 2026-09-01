@@ -1,7 +1,6 @@
 import argv
 import fusion/build
 import fusion/cli
-import gleam/io
 import glint
 
 pub fn main() {
