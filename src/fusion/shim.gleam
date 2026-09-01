@@ -15,6 +15,9 @@ pub fn generate_shim(
   let _ = simplifile.create_directory_all(shim_dir)
   let shim_path = filepath.join(shim_dir, "shim.js")
 
+  // Copy adapter.mjs from spaceship_helm to build output
+  let _ = copy_adapter(project_root)
+
   let content = case config.runtime {
     "cloudflare" -> {
       let _ = generate_wrangler_toml(project_root, package_name)
@@ -28,6 +31,26 @@ pub fn generate_shim(
 
   simplifile.write(shim_path, content)
   |> result.map_error(fn(_) { "Failed to write shim.js" })
+}
+
+/// Copy adapter.mjs from spaceship_helm package to build output
+fn copy_adapter(project_root: String) -> Result(Nil, String) {
+  // Look for adapter.mjs in spaceship_helm package
+  // Path: project_root/../../spaceship_helm/ffi/adapter.mjs
+  let adapter_src = filepath.join(project_root, "../../spaceship_helm/ffi/adapter.mjs")
+  let adapter_dst = filepath.join(project_root, "build/fusion/adapter.mjs")
+  
+  case simplifile.read(adapter_src) {
+    Ok(content) -> {
+      let _ = simplifile.create_directory_all(filepath.join(project_root, "build/fusion"))
+      simplifile.write(adapter_dst, content)
+      |> result.map_error(fn(_) { "Failed to copy adapter" })
+    }
+    Error(_) -> {
+      // Adapter not found, skip
+      Ok(Nil)
+    }
+  }
 }
 
 /// Generate wrangler.toml for Cloudflare Workers.
@@ -74,11 +97,12 @@ fn cloudflare_shim(
     ]
     |> string.join("")
 
+  let adapter_import = "import { toGleamRequest, toPlatformResponse } from \"./adapter.mjs\";"
+
   let class_imports =
     list.filter_map(classes, fn(class) {
       case class.should_export {
         True -> {
-          // source_file is like "classes/worker", we need just "worker"
           let filename = case string.split(class.source_file, "/") {
             [] -> class.source_file
             parts -> list.last(parts) |> result.unwrap(class.source_file)
@@ -104,7 +128,9 @@ fn cloudflare_shim(
       "  async fetch(req, env, ctx) {",
       "    globalThis.__env = env;",
       "    globalThis.__ctx = ctx;",
-      "    return " <> entry_point <> "(req, env, ctx);",
+      "    const gleamReq = toGleamRequest(req);",
+      "    const resp = " <> entry_point <> "(gleamReq, env, ctx);",
+      "    return toPlatformResponse(resp);",
       "  }",
       "};",
     ]
@@ -124,6 +150,7 @@ fn cloudflare_shim(
 
   let sections = [
     app_import,
+    adapter_import,
     string.join(class_imports, "\n"),
     default_export,
     named_exports,
