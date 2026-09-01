@@ -11,8 +11,8 @@ import glint
 import simplifile
 import spaceship_toml
 
-@external(erlang, "dev_ffi", "run_command_in")
-fn run_command_in(
+@external(erlang, "dev_ffi", "run_background")
+fn run_background(
   cmd: String,
   args: List(String),
   cwd: String,
@@ -323,7 +323,7 @@ fn do_dev() {
       )
       // Run node with the built shim
       let shim_path = filepath.join(root, "build/fusion/shim.js")
-      case run_command_in("node", [shim_path], root) {
+      case run_background("node", [shim_path], root) {
         Ok(output) -> io.println(output)
         Error(e) -> io.println_error("Server error: " <> e)
       }
@@ -331,7 +331,7 @@ fn do_dev() {
     "cloudflare" -> {
       io.println("Starting Wrangler dev server...\n")
       // Run wrangler dev for Cloudflare Workers
-      case run_command_in("npx", ["wrangler", "dev"], root) {
+      case run_background("npx", ["wrangler", "dev"], root) {
         Ok(output) -> io.println(output)
         Error(e) -> io.println_error("Wrangler error: " <> e)
       }

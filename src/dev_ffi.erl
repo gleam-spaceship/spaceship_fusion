@@ -1,5 +1,5 @@
 -module(dev_ffi).
--export([run_command/2, run_command_in/3, get_today/0]).
+-export([run_command/2, run_command_in/3, run_background/3, get_today/0]).
 
 run_command(Cmd, Args) ->
     run_command_in(Cmd, Args, ".").
@@ -37,6 +37,35 @@ command_result(Output, FullCmd) ->
 to_list(Data) when is_binary(Data) -> binary_to_list(Data);
 to_list(Data) when is_list(Data) -> Data;
 to_list(Data) -> lists:flatten(io_lib:format("~p", [Data])).
+
+run_background(Cmd, Args, Cwd) ->
+    ArgsList = [to_list(A) || A <- Args],
+    CwdStr = to_list(Cwd),
+    CmdStr = to_list(Cmd),
+    FilteredArgs = ["\"" ++ A ++ "\"" || A <- ArgsList, A =/= ""],
+    FullCmd = "cd " ++ CwdStr ++ " && " ++ CmdStr ++ " " ++ string:join(FilteredArgs, " "),
+    try
+        Port = open_port({spawn, "/bin/sh -c '" ++ FullCmd ++ "'"}, [exit_status, stream, {line, 200}]),
+        port_loop(Port)
+    catch
+        error:Reason ->
+            Msg = iolist_to_binary(io_lib:format("~p", [Reason])),
+            {error, iolist_to_binary([<<"Failed: ">>, iolist_to_binary(FullCmd), <<" - ">>, Msg])}
+    end.
+
+port_loop(Port) ->
+    receive
+        {Port, {data, {_, Data}}} ->
+            io:format("~s", [Data]),
+            port_loop(Port);
+        {Port, {exit_status, 0}} ->
+            {ok, <<>>};
+        {Port, {exit_status, Status}} ->
+            {error, iolist_to_binary(io_lib:format("Process exited with status ~p", [Status]))}
+    after
+        30000 ->
+            {ok, <<>>}
+    end.
 
 get_today() ->
     Timestamp = erlang:timestamp(),
