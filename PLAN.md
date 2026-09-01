@@ -1,5 +1,31 @@
 # Fusion CLI Improvements
 
+## Dependencies
+
+```toml
+gleam add glint
+gleam add argv
+```
+
+## CLI Structure
+
+```gleam
+import glint
+import argv
+
+pub fn main() {
+  glint.new()
+  |> glint.with_name("fusion")
+  |> glint.pretty_help(glint.default_pretty_help())
+  |> glint.add(at: [], do: build_cmd())  // default command
+  |> glint.add(at: ["init"], do: init_cmd())
+  |> glint.add(at: ["class", "create"], do: class_create_cmd())
+  |> glint.add(at: ["class", "list"], do: class_list_cmd())
+  |> glint.add(at: ["dev"], do: dev_cmd())
+  |> glint.run(argv.load().arguments)
+}
+```
+
 ## Commands
 
 ### `fusion init`
