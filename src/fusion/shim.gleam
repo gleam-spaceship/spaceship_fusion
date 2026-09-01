@@ -36,17 +36,15 @@ fn generate_wrangler_toml(
   package_name: String,
 ) -> Result(Nil, String) {
   let toml_path = filepath.join(project_root, "wrangler.toml")
-  let content =
-    "name = \""
-    <> package_name
-    <> "\"\n"
-    <> "main = \"build/dist/index.js\"\n"
-    <> "compatibility_date = \""
-    <> get_compatibility_date()
-    <> "\"\n"
-    <> "[assets]\n"
-    <> "directory = \"build/static\"\n"
-    <> "binding = \"ASSETS\"\n"
+  let content = [
+    "name = \"" <> package_name <> "\"",
+    "main = \"build/dist/index.js\"",
+    "compatibility_date = \"" <> get_compatibility_date() <> "\"",
+    "[assets]",
+    "directory = \"build/static\"",
+    "binding = \"ASSETS\"",
+  ]
+  |> string.join("\n")
 
   simplifile.write(toml_path, content)
   |> result.map_error(fn(_) { "Failed to write wrangler.toml" })
@@ -63,14 +61,16 @@ fn cloudflare_shim(
   entry_point: String,
   classes: List(ClassDef),
 ) -> String {
-  let app_import =
-    "import { "
-    <> entry_point
-    <> " } from \"../dev/javascript/"
-    <> package_name
-    <> "/"
-    <> package_name
-    <> ".mjs\";"
+  let app_import = [
+    "import { ",
+    entry_point,
+    " } from \"../dev/javascript/",
+    package_name,
+    "/",
+    package_name,
+    ".mjs\";",
+  ]
+  |> string.join("")
 
   let class_imports =
     list.filter_map(classes, fn(class) {
@@ -81,22 +81,29 @@ fn cloudflare_shim(
             [] -> class.source_file
             parts -> list.last(parts) |> result.unwrap(class.source_file)
           }
-          Ok(
-            "import { "
-            <> class.name
-            <> " } from \"./classes/"
-            <> filename
-            <> ".mjs\";",
-          )
+          Ok([
+            "import { ",
+            class.name,
+            " } from \"./classes/",
+            filename,
+            ".mjs\";",
+          ]
+          |> string.join(""))
         }
         False -> Error(Nil)
       }
     })
 
-  let default_export =
-    "export default {\n  async fetch(req, env, ctx) {\n    globalThis.__env = env;\n    globalThis.__ctx = ctx;\n    return "
-    <> entry_point
-    <> "(req, env, ctx);\n  }\n};"
+  let default_export = [
+    "export default {",
+    "  async fetch(req, env, ctx) {",
+    "    globalThis.__env = env;",
+    "    globalThis.__ctx = ctx;",
+    "    return " <> entry_point <> "(req, env, ctx);",
+    "  }",
+    "};",
+  ]
+  |> string.join("\n")
 
   let named_exports = case
     list.filter_map(classes, fn(class) {
@@ -220,25 +227,31 @@ server.listen(3000, () => console.log(\"Server running on http://localhost:3000\
 }
 
 fn bun_shim(package_name: String, entry_point: String) -> String {
-  "import { "
-  <> entry_point
-  <> " } from \"../dev/javascript/"
-  <> package_name
-  <> "/"
-  <> package_name
-  <> ".mjs\";\n\nBun.serve({ port: 3000, fetch: "
-  <> entry_point
-  <> " });"
+  [
+    "import { ",
+    entry_point,
+    " } from \"../dev/javascript/",
+    package_name,
+    "/",
+    package_name,
+    ".mjs\";",
+    "",
+    "Bun.serve({ port: 3000, fetch: " <> entry_point <> " });",
+  ]
+  |> string.join("\n")
 }
 
 fn deno_shim(package_name: String, entry_point: String) -> String {
-  "import { "
-  <> entry_point
-  <> " } from \"../dev/javascript/"
-  <> package_name
-  <> "/"
-  <> package_name
-  <> ".mjs\";\n\nDeno.serve({ port: 3000 }, "
-  <> entry_point
-  <> ");"
+  [
+    "import { ",
+    entry_point,
+    " } from \"../dev/javascript/",
+    package_name,
+    "/",
+    package_name,
+    ".mjs\";",
+    "",
+    "Deno.serve({ port: 3000 }, " <> entry_point <> ");",
+  ]
+  |> string.join("\n")
 }

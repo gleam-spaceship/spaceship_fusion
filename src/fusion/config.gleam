@@ -302,37 +302,45 @@ fn config_to_json(config: FusionConfig) -> String {
 fn class_to_json(class: ClassDef) -> String {
   let extends_json = case class.extends {
     None -> "null"
-    Some(ext) ->
-      "{ \"name\": "
-      <> escape_json_string(ext.name)
-      <> ", \"from\": "
-      <> escape_json_string(ext.from)
-      <> " }"
+    Some(ext) -> [
+      "{ \"name\": ",
+      escape_json_string(ext.name),
+      ", \"from\": ",
+      escape_json_string(ext.from),
+      " }",
+    ]
+    |> string.join("")
   }
 
   let methods_json = list.map(class.methods, method_to_json)
 
-  "{ \"name\": "
-  <> escape_json_string(class.name)
-  <> ", \"extends\": "
-  <> extends_json
-  <> ", \"methods\": ["
-  <> string.join(methods_json, ", ")
-  <> "], \"export\": "
-  <> bool_to_string(class.should_export)
-  <> ", \"source_file\": "
-  <> escape_json_string(class.source_file)
-  <> " }"
+  [
+    "{ \"name\": ",
+    escape_json_string(class.name),
+    ", \"extends\": ",
+    extends_json,
+    ", \"methods\": [",
+    string.join(methods_json, ", "),
+    "], \"export\": ",
+    bool_to_string(class.should_export),
+    ", \"source_file\": ",
+    escape_json_string(class.source_file),
+    " }",
+  ]
+  |> string.join("")
 }
 
 fn method_to_json(method: Method) -> String {
-  "{ \"name\": "
-  <> escape_json_string(method.name)
-  <> ", \"params\": ["
-  <> string.join(list.map(method.params, escape_json_string), ", ")
-  <> "], \"is_async\": "
-  <> bool_to_string(method.is_async)
-  <> " }"
+  [
+    "{ \"name\": ",
+    escape_json_string(method.name),
+    ", \"params\": [",
+    string.join(list.map(method.params, escape_json_string), ", "),
+    "], \"is_async\": ",
+    bool_to_string(method.is_async),
+    " }",
+  ]
+  |> string.join("")
 }
 
 fn escape_json_string(s: String) -> String {

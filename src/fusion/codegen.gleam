@@ -46,8 +46,14 @@ fn generate_class_file(class: ClassDef, package_name: String) -> String {
 fn generate_imports(class: ClassDef, package_name: String) -> String {
   let parent_import = case class.extends {
     None -> ""
-    Some(Extends(name:, from:)) ->
-      "import { " <> name <> " } from \"" <> from <> "\";"
+    Some(Extends(name:, from:)) -> [
+      "import { ",
+      name,
+      " } from \"",
+      from,
+      "\";",
+    ]
+    |> string.join("")
   }
 
   let function_import = case class.methods {
@@ -59,13 +65,16 @@ fn generate_imports(class: ClassDef, package_name: String) -> String {
           method.name <> " as " <> function_alias(method)
         })
         |> string.join(", ")
-      "import { "
-      <> imports
-      <> " } from \"../../dev/javascript/"
-      <> package_name
-      <> "/"
-      <> class.source_file
-      <> ".mjs\";"
+      [
+        "import { ",
+        imports,
+        " } from \"../../dev/javascript/",
+        package_name,
+        "/",
+        class.source_file,
+        ".mjs\";",
+      ]
+      |> string.join("")
     }
   }
 
@@ -119,16 +128,12 @@ fn generate_method(method: Method) -> String {
   let params_str = string.join(params, ", ")
   let args_str = string.join(params, ", ")
 
-  "  "
-  <> async_str
-  <> method.name
-  <> "("
-  <> params_str
-  <> ") {\n    return "
-  <> function_alias(method)
-  <> "("
-  <> args_str
-  <> ");\n  }"
+  [
+    "  " <> async_str <> method.name <> "(" <> params_str <> ") {",
+    "    return " <> function_alias(method) <> "(" <> args_str <> ");",
+    "  }",
+  ]
+  |> string.join("\n")
 }
 
 fn function_alias(method: Method) -> String {
