@@ -11,8 +11,6 @@ run_command_in(Cmd, Args, Cwd) ->
     FilteredArgs = ["\"" ++ A ++ "\"" || A <- ArgsList, A =/= ""],
     FullCmd = "cd " ++ CwdStr ++ " && " ++ CmdStr ++ " " ++ string:join(FilteredArgs, " "),
     try
-        %% os:cmd/1 returns command output, not its exit status. Append a
-        %% marker so failed builds are not reported as successful.
         Output = os:cmd(FullCmd ++ "; printf '\\n__FUSION_STATUS:%s\\n' \"$?\""),
         command_result(Output, FullCmd)
     catch
