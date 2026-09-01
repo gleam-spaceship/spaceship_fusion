@@ -1,9 +1,11 @@
 import fusion/build
 import gleam/io
 import gleam/list
+import gleam/option.{None}
 import gleam/string
 import glint
 import simplifile
+import spaceship_toml
 
 pub fn build_cmd() -> glint.Command(Nil) {
   use <- glint.command_help("Build the project")
@@ -39,8 +41,86 @@ fn do_init(cloudflare: Bool, wrangler: String) {
   io.println("═══ fusion init ═══\n")
   io.println("Target: " <> cloudflare_name(cloudflare))
   io.println("Wrangler: " <> wrangler)
-  // TODO: Edit gleam.toml
-  // TODO: Generate wrangler.toml for cloudflare
+  
+  // Read gleam.toml
+  let assert Ok(content) = simplifile.read("gleam.toml")
+  
+  // Parse toml
+  let assert Ok(doc) = spaceship_toml.parse(content)
+  
+  // Get runtime value
+  let runtime = case cloudflare {
+    True -> "cloudflare"
+    False -> "node"
+  }
+  
+  // Check if [fusion] section exists
+  let doc = case spaceship_toml.get_table(doc, ["fusion"]) {
+    Ok(_) -> {
+      // Section exists, update runtime
+      let assert Ok(doc) = spaceship_toml.set(
+        doc,
+        ["fusion", "runtime"],
+        spaceship_toml.string(runtime),
+        None,
+      )
+      doc
+    }
+    Error(_) -> {
+      // Section doesn't exist, add it
+      let assert Ok(doc) = spaceship_toml.add_table(doc, ["fusion"], None)
+      let assert Ok(doc) = spaceship_toml.set(
+        doc,
+        ["fusion", "runtime"],
+        spaceship_toml.string(runtime),
+        None,
+      )
+      let assert Ok(doc) = spaceship_toml.set(
+        doc,
+        ["fusion", "entry_point"],
+        spaceship_toml.string("main"),
+        None,
+      )
+      let assert Ok(doc) = spaceship_toml.set(
+        doc,
+        ["fusion", "port"],
+        spaceship_toml.integer(8080),
+        None,
+      )
+      let assert Ok(doc) = spaceship_toml.set(
+        doc,
+        ["fusion", "minify"],
+        spaceship_toml.boolean(False),
+        None,
+      )
+      let assert Ok(doc) = spaceship_toml.set(
+        doc,
+        ["fusion", "source_map"],
+        spaceship_toml.boolean(True),
+        None,
+      )
+      doc
+    }
+  }
+  
+  // Write updated toml
+  let output = spaceship_toml.to_string(doc)
+  let assert Ok(Nil) = simplifile.write("gleam.toml", output)
+  
+  io.println("\nUpdated gleam.toml with [fusion] section")
+  
+  // Generate wrangler.toml for cloudflare
+  case cloudflare {
+    True -> {
+      let assert Ok(Nil) = simplifile.write(
+        "wrangler.toml",
+        generate_wrangler_toml(wrangler),
+      )
+      io.println("Generated wrangler.toml")
+    }
+    False -> Nil
+  }
+  
   io.println("\n═══ Done ═══")
 }
 
@@ -49,6 +129,17 @@ fn cloudflare_name(cloudflare: Bool) -> String {
     True -> "cloudflare"
     False -> "node"
   }
+}
+
+fn generate_wrangler_toml(wrangler: String) -> String {
+  let version = case wrangler {
+    "latest" -> "3"
+    v -> v
+  }
+  "name = \"app\"\nmain = \"build/dist/index.js\"\ncompatibility_date = \"2024-09-23\"\ncompatibility_flags = [\"nodejs_compat\"]\n"
+  <> "wrangler = \""
+  <> version
+  <> "\"\n\n[assets]\ndirectory = \"public\"\nbinding = \"ASSETS\"\n"
 }
 
 pub fn class_create_cmd() -> glint.Command(Nil) {
