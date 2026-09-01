@@ -1,5 +1,8 @@
 import fusion/build
+import fusion/config
 import fusion/date
+import filepath
+import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option.{None}
@@ -7,6 +10,13 @@ import gleam/string
 import glint
 import simplifile
 import spaceship_toml
+
+@external(erlang, "dev_ffi", "run_command_in")
+fn run_command_in(
+  cmd: String,
+  args: List(String),
+  cwd: String,
+) -> Result(String, String)
 
 pub fn build_cmd() -> glint.Command(Nil) {
   use <- glint.command_help("Build the project")
@@ -229,9 +239,10 @@ pub fn class_list_cmd() -> glint.Command(Nil) {
 
 fn do_class_list() {
   io.println("═══ fusion class list ═══\n")
-  // TODO: Parse classes from src/classes/
-  io.println("No classes found.")
-  io.println("\n═══ Done ═══")
+  let root = build.find_project_root()
+  case build.do_scan(root) {
+    _ -> io.println("\n═══ Done ═══")
+  }
 }
 
 pub fn dev_cmd() -> glint.Command(Nil) {
@@ -242,6 +253,42 @@ pub fn dev_cmd() -> glint.Command(Nil) {
 
 fn do_dev() {
   io.println("═══ fusion dev ═══\n")
-  io.println("Development mode not yet implemented.")
+  io.println("Starting development server...\n")
+  
+  // First, do a build
+  let root = build.find_project_root()
+  build.do_build(root)
+  
+  // Then start file watcher and run server
+  io.println("\nWatching for changes...\n")
+  
+  // Read config to get runtime and port
+  let config = config.read_fusion_config(root)
+  let port = config.port
+  
+  case config.runtime {
+    "node" -> {
+      io.println("Starting Node.js server on port " <> int.to_string(port) <> "...\n")
+      // Run node with the built shim
+      let shim_path = filepath.join(root, "build/fusion/shim.js")
+      case run_command_in("node", [shim_path], root) {
+        Ok(output) -> io.println(output)
+        Error(e) -> io.println_error("Server error: " <> e)
+      }
+    }
+    "cloudflare" -> {
+      io.println("Starting Wrangler dev server...\n")
+      // Run wrangler dev for Cloudflare Workers
+      case run_command_in("npx", ["wrangler", "dev"], root) {
+        Ok(output) -> io.println(output)
+        Error(e) -> io.println_error("Wrangler error: " <> e)
+      }
+    }
+    runtime -> {
+      io.println_error("Runtime '" <> runtime <> "' not supported for dev mode")
+      io.println("Supported runtimes: node, cloudflare")
+    }
+  }
+  
   io.println("\n═══ Done ═══")
 }
