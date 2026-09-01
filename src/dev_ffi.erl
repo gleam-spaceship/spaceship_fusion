@@ -42,21 +42,21 @@ run_background(Cmd, Args, Cwd) ->
     CmdStr = to_list(Cmd),
     FilteredArgs = ["\"" ++ A ++ "\"" || A <- ArgsList, A =/= ""],
     FullCmd = "cd " ++ CwdStr ++ " && " ++ CmdStr ++ " " ++ string:join(FilteredArgs, " "),
-    Port = open_port({spawn, "/bin/sh -c '" ++ FullCmd ++ "'"}, [exit_status, {line, 1024}, eof]),
-    port_loop(Port, <<>>).
+    Port = open_port({spawn, "/bin/sh -c '" ++ FullCmd ++ "'"}, [exit_status, binary, eof, {line, 1024}]),
+    port_loop(Port).
 
-port_loop(Port, Acc) ->
+port_loop(Port) ->
     receive
         {Port, {data, {eol, Data}}} ->
             io:format("~ts~n", [Data]),
-            port_loop(Port, Acc);
+            port_loop(Port);
         {Port, {data, {noeol, Data}}} ->
             io:format("~ts", [Data]),
-            port_loop(Port, Acc);
+            port_loop(Port);
         {Port, eof} ->
-            {ok, Acc};
+            {ok, <<>>};
         {Port, {exit_status, 0}} ->
-            {ok, Acc};
+            {ok, <<>>};
         {Port, {exit_status, Status}} ->
             {error, iolist_to_binary(io_lib:format("Process exited with status ~p", [Status]))}
     end.
