@@ -137,7 +137,23 @@ fn generate_wrangler_toml(wrangler: String) -> String {
     "latest" -> "3"
     v -> v
   }
-  "name = \"app\"\nmain = \"build/dist/index.js\"\ncompatibility_date = \"" <> date.today() <> "\"\ncompatibility_flags = [\"nodejs_compat\"]\nwrangler = \"" <> version <> "\"\n\n[assets]\ndirectory = \"public\"\nbinding = \"ASSETS\"\n"
+  
+  let assert Ok(doc) = spaceship_toml.parse("")
+  let assert Ok(doc) = spaceship_toml.set(doc, ["name"], spaceship_toml.string("app"), None)
+  let assert Ok(doc) = spaceship_toml.set(doc, ["main"], spaceship_toml.string("build/dist/index.js"), None)
+  let assert Ok(doc) = spaceship_toml.set(doc, ["compatibility_date"], spaceship_toml.string(date.today()), None)
+  let assert Ok(doc) = spaceship_toml.set(doc, ["wrangler"], spaceship_toml.string(version), None)
+  let assert Ok(doc) = spaceship_toml.set(
+    doc,
+    ["compatibility_flags"],
+    spaceship_toml.array([spaceship_toml.string("nodejs_compat")]),
+    None,
+  )
+  let assert Ok(doc) = spaceship_toml.add_table(doc, ["assets"], None)
+  let assert Ok(doc) = spaceship_toml.set(doc, ["assets", "directory"], spaceship_toml.string("public"), None)
+  let assert Ok(doc) = spaceship_toml.set(doc, ["assets", "binding"], spaceship_toml.string("ASSETS"), None)
+  
+  spaceship_toml.to_string(doc)
 }
 
 pub fn class_create_cmd() -> glint.Command(Nil) {
