@@ -15,14 +15,9 @@ pub fn generate_shim(
   let _ = simplifile.create_directory_all(shim_dir)
   let shim_path = filepath.join(shim_dir, "shim.js")
 
-  // Copy adapter to build output with corrected paths
-  let _ = copy_adapter(project_root, config.runtime)
-
   let content = case config.runtime {
-    "cloudflare" -> {
-      let _ = generate_wrangler_toml(project_root, package_name)
+    "cloudflare" ->
       cloudflare_shim(package_name, config.entry_point, config.classes)
-    }
     "node" -> node_shim(package_name, config.entry_point)
     "bun" -> bun_shim(package_name, config.entry_point)
     "deno" -> deno_shim(package_name, config.entry_point)
@@ -33,61 +28,13 @@ pub fn generate_shim(
   |> result.map_error(fn(_) { "Failed to write shim.js" })
 }
 
-/// Copy adapter.mjs from spaceship_helm to build output with corrected paths
-fn copy_adapter(project_root: String, runtime: String) -> Result(Nil, String) {
-  // Find spaceship_helm in workspace (look for sibling directory)
-  let workspace_root = filepath.join(project_root, "../..")
-  let adapter_src = filepath.join(workspace_root, "spaceship_helm/ffi/runtimes/" <> runtime <> ".mjs")
-  let adapter_dst = filepath.join(project_root, "build/fusion/adapter.mjs")
-  
-  case simplifile.read(adapter_src) {
-    Ok(content) -> {
-      // Fix import paths to be relative to build/fusion/
-      let fixed_content = content
-        |> string.replace(
-          "../../dev/javascript/gleam_stdlib/gleam/option.mjs",
-          "../dev/javascript/gleam_stdlib/gleam/option.mjs",
-        )
-        |> string.replace(
-          "../../dev/javascript/gleam_http/gleam/http.mjs",
-          "../dev/javascript/gleam_http/gleam/http.mjs",
-        )
-      let _ = simplifile.create_directory_all(filepath.join(project_root, "build/fusion"))
-      simplifile.write(adapter_dst, fixed_content)
-      |> result.map_error(fn(_) { "Failed to copy adapter" })
-    }
-    Error(_) -> {
-      // Adapter not found, skip
-      Ok(Nil)
-    }
-  }
-}
-
-/// Generate wrangler.toml for Cloudflare Workers.
-fn generate_wrangler_toml(
-  project_root: String,
-  package_name: String,
-) -> Result(Nil, String) {
-  let toml_path = filepath.join(project_root, "wrangler.toml")
-  let content =
-    [
-      "name = \"" <> package_name <> "\"",
-      "main = \"build/dist/index.js\"",
-      "compatibility_date = \"" <> get_compatibility_date() <> "\"",
-      "[assets]",
-      "directory = \"build/static\"",
-      "binding = \"ASSETS\"",
-    ]
-    |> string.join("\n")
-
-  simplifile.write(toml_path, content)
-  |> result.map_error(fn(_) { "Failed to write wrangler.toml" })
-}
-
-/// Get current date for compatibility_date.
-fn get_compatibility_date() -> String {
-  // Use a fixed date for now, can be updated later
-  "2024-01-01"
+fn adapter_import(runtime: String) -> String {
+  [
+    "import { toGleamRequest, toPlatformResponse } from \"../dev/javascript/spaceship_helm/spaceship_helm/ffi/runtimes/",
+    runtime,
+    ".mjs\";",
+  ]
+  |> string.join("")
 }
 
 fn cloudflare_shim(
@@ -107,7 +54,7 @@ fn cloudflare_shim(
     ]
     |> string.join("")
 
-  let adapter_import = "import { toGleamRequest, toPlatformResponse } from \"./adapter.mjs\";"
+  let adapter_import = adapter_import("cloudflare")
 
   let class_imports =
     list.filter_map(classes, fn(class) {
@@ -138,8 +85,8 @@ fn cloudflare_shim(
       "  async fetch(req, env, ctx) {",
       "    globalThis.__env = env;",
       "    globalThis.__ctx = ctx;",
-      "    const gleamReq = toGleamRequest(req);",
-      "    const resp = " <> entry_point <> "(gleamReq, env, ctx);",
+      "    const gleamReq = await toGleamRequest(req);",
+      "    const resp = await " <> entry_point <> "(gleamReq, env, ctx);",
       "    return toPlatformResponse(resp);",
       "  }",
       "};",
@@ -180,11 +127,11 @@ fn node_shim(package_name: String, entry_point: String) -> String {
     "/",
     package_name,
     ".mjs\";",
-    "import { toGleamRequest, toPlatformResponse } from \"./adapter.mjs\";",
+    adapter_import("node"),
     "",
-    "const server = http.createServer((req, res) => {",
-    "  const gleamReq = toGleamRequest(req);",
-    "  const resp = " <> entry_point <> "(gleamReq, null, null);",
+    "const server = http.createServer(async (req, res) => {",
+    "  const gleamReq = await toGleamRequest(req);",
+    "  const resp = await " <> entry_point <> "(gleamReq, null, null);",
     "  toPlatformResponse(resp, res);",
     "});",
     "",
@@ -205,13 +152,13 @@ fn bun_shim(package_name: String, entry_point: String) -> String {
     "/",
     package_name,
     ".mjs\";",
-    "import { toGleamRequest, toPlatformResponse } from \"./adapter.mjs\";",
+    adapter_import("bun"),
     "",
     "Bun.serve({",
     "  port: 3000,",
     "  async fetch(req) {",
-    "    const gleamReq = toGleamRequest(req);",
-    "    const resp = " <> entry_point <> "(gleamReq, null, null);",
+    "    const gleamReq = await toGleamRequest(req);",
+    "    const resp = await " <> entry_point <> "(gleamReq, null, null);",
     "    return toPlatformResponse(resp);",
     "  }",
     "});",
@@ -228,11 +175,11 @@ fn deno_shim(package_name: String, entry_point: String) -> String {
     "/",
     package_name,
     ".mjs\";",
-    "import { toGleamRequest, toPlatformResponse } from \"./adapter.mjs\";",
+    adapter_import("deno"),
     "",
     "Deno.serve({ port: 3000 }, async (req) => {",
-    "  const gleamReq = toGleamRequest(req);",
-    "  const resp = " <> entry_point <> "(gleamReq, null, null);",
+    "  const gleamReq = await toGleamRequest(req);",
+    "  const resp = await " <> entry_point <> "(gleamReq, null, null);",
     "  return toPlatformResponse(resp);",
     "});",
   ]
