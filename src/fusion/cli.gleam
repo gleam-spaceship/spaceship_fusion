@@ -149,6 +149,12 @@ fn generate_wrangler_toml(wrangler: String) -> String {
     spaceship_toml.array([spaceship_toml.string("nodejs_compat")]),
     None,
   )
+  // D1 database binding
+  let assert Ok(doc) = spaceship_toml.add_array_of_tables(doc, ["d1_databases"], None)
+  let assert Ok(doc) = spaceship_toml.set(doc, ["d1_databases", "binding"], spaceship_toml.string("DB"), None)
+  let assert Ok(doc) = spaceship_toml.set(doc, ["d1_databases", "database_name"], spaceship_toml.string("notes-db"), None)
+  let assert Ok(doc) = spaceship_toml.set(doc, ["d1_databases", "database_id"], spaceship_toml.string("placeholder"), None)
+  // Assets binding
   let assert Ok(doc) = spaceship_toml.add_table(doc, ["assets"], None)
   let assert Ok(doc) = spaceship_toml.set(doc, ["assets", "directory"], spaceship_toml.string("public"), None)
   let assert Ok(doc) = spaceship_toml.set(doc, ["assets", "binding"], spaceship_toml.string("ASSETS"), None)

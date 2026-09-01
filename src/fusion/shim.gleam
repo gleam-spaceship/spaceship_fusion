@@ -94,7 +94,7 @@ fn cloudflare_shim(
     })
 
   let default_export =
-    "export default {\n  async fetch(req, env, ctx) {\n    return "
+    "export default {\n  async fetch(req, env, ctx) {\n    globalThis.__env = env;\n    globalThis.__ctx = ctx;\n    return "
     <> entry_point
     <> "(req, env, ctx);\n  }\n};"
 
