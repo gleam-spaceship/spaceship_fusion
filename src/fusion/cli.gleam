@@ -1,8 +1,21 @@
+import fusion/build
 import gleam/io
 import gleam/list
 import gleam/string
 import glint
 import simplifile
+
+pub fn build_cmd() -> glint.Command(Nil) {
+  use <- glint.command_help("Build the project")
+  use _, _, _ <- glint.command()
+  build.do_build(build.find_project_root())
+}
+
+pub fn scan_cmd() -> glint.Command(Nil) {
+  use <- glint.command_help("Scan class files and cache metadata")
+  use _, _, _ <- glint.command()
+  build.do_scan(build.find_project_root())
+}
 
 pub fn init_cmd() -> glint.Command(Nil) {
   use <- glint.command_help("Initialize a new fusion project")
