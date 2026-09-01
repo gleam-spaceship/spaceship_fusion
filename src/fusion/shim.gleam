@@ -15,7 +15,7 @@ pub fn generate_shim(
   let _ = simplifile.create_directory_all(shim_dir)
   let shim_path = filepath.join(shim_dir, "shim.js")
 
-  // Copy adapter.mjs from spaceship_helm to build output
+  // Copy adapter to build output with corrected paths
   let _ = copy_adapter(project_root)
 
   let content = case config.runtime {
@@ -33,17 +33,27 @@ pub fn generate_shim(
   |> result.map_error(fn(_) { "Failed to write shim.js" })
 }
 
-/// Copy adapter.mjs from spaceship_helm package to build output
+/// Copy adapter.mjs from spaceship_helm to build output with corrected paths
 fn copy_adapter(project_root: String) -> Result(Nil, String) {
-  // Look for adapter.mjs in spaceship_helm package
-  // Path: project_root/../../spaceship_helm/ffi/adapter.mjs
-  let adapter_src = filepath.join(project_root, "../../spaceship_helm/ffi/adapter.mjs")
+  // Find spaceship_helm in workspace (look for sibling directory)
+  let workspace_root = filepath.join(project_root, "../..")
+  let adapter_src = filepath.join(workspace_root, "spaceship_helm/ffi/runtimes/cloudflare.mjs")
   let adapter_dst = filepath.join(project_root, "build/fusion/adapter.mjs")
   
   case simplifile.read(adapter_src) {
     Ok(content) -> {
+      // Fix import paths to be relative to build/fusion/
+      let fixed_content = content
+        |> string.replace(
+          "../../dev/javascript/gleam_stdlib/gleam/option.mjs",
+          "../dev/javascript/gleam_stdlib/gleam/option.mjs",
+        )
+        |> string.replace(
+          "../../dev/javascript/gleam_http/gleam/http.mjs",
+          "../dev/javascript/gleam_http/gleam/http.mjs",
+        )
       let _ = simplifile.create_directory_all(filepath.join(project_root, "build/fusion"))
-      simplifile.write(adapter_dst, content)
+      simplifile.write(adapter_dst, fixed_content)
       |> result.map_error(fn(_) { "Failed to copy adapter" })
     }
     Error(_) -> {
