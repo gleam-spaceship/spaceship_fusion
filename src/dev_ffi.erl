@@ -1,5 +1,5 @@
 -module(dev_ffi).
--export([run_command/2, run_command_in/3, run_background/3, get_today/0]).
+-export([run_command/2, run_command_in/3, run_background/3, get_today/0, encode_base64/1]).
 
 run_command(Cmd, Args) ->
     run_command_in(Cmd, Args, ".").
@@ -69,3 +69,10 @@ get_today() ->
     {Year, Month, Day} = Date,
     Formatted = io_lib:format("~4..0B-~2..0B-~2..0B", [Year, Month, Day]),
     unicode:characters_to_binary(Formatted).
+
+encode_base64(Data) when is_binary(Data) ->
+    base64:encode(Data);
+encode_base64(Data) when is_list(Data) ->
+    base64:encode(list_to_binary(Data));
+encode_base64(Data) ->
+    base64:encode(term_to_binary(Data)).

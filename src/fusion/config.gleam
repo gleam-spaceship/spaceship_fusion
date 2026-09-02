@@ -1,6 +1,8 @@
 import filepath
 import fusion/parser
-import fusion/types.{type ClassDef, type FusionConfig, type Method, FusionConfig}
+import fusion/types.{
+  type ClassDef, type FusionConfig, type Method, AssetConfig, FusionConfig,
+}
 import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
@@ -19,6 +21,7 @@ pub fn generate_metadata(project_root: String) -> Result(Nil, String) {
       port: 3000,
       minify: True,
       source_map: True,
+      assets: AssetConfig(directory: "public", includes: []),
     )
   let config_dir = filepath.join(project_root, ".spaceship/fusion")
   let _ = simplifile.create_directory_all(config_dir)
@@ -50,6 +53,7 @@ pub fn read_fusion_config(project_root: String) -> FusionConfig {
         port: 3000,
         minify: True,
         source_map: True,
+        assets: AssetConfig(directory: "public", includes: []),
       )
   }
 }
@@ -122,20 +126,40 @@ fn parse_all_class_files(
   |> result.map(list.reverse)
 }
 
+// ── TOML Parsing ──────────────────────────────────────────────
+
 /// Parse [fusion] section from TOML content.
 fn parse_fusion_section(content: String) -> FusionConfig {
   let lines = string.split(content, "\n")
-  do_parse_fusion(lines, False, "cloudflare", "main", 3000, True, True)
+  do_parse_fusion(
+    lines,
+    OtherSection,
+    "cloudflare",
+    "main",
+    3000,
+    True,
+    True,
+    "public",
+    [],
+  )
+}
+
+type ParseSection {
+  FusionSection
+  AssetsSection
+  OtherSection
 }
 
 fn do_parse_fusion(
   lines: List(String),
-  in_fusion: Bool,
+  section: ParseSection,
   runtime: String,
   entry_point: String,
   port: Int,
   minify: Bool,
   source_map: Bool,
+  assets_dir: String,
+  assets_includes: List(String),
 ) -> FusionConfig {
   case lines {
     [] ->
@@ -146,74 +170,104 @@ fn do_parse_fusion(
         port:,
         minify:,
         source_map:,
+        assets: AssetConfig(directory: assets_dir, includes: assets_includes),
       )
     [line, ..rest] -> {
       let trimmed = string.trim(line)
 
-      // Detect section headers
-      case is_section_header(trimmed) {
-        True -> {
-          case trimmed {
-            "[fusion]" ->
-              do_parse_fusion(
-                rest,
-                True,
-                runtime,
-                entry_point,
-                port,
-                minify,
-                source_map,
-              )
-            _ ->
-              do_parse_fusion(
-                rest,
-                False,
-                runtime,
-                entry_point,
-                port,
-                minify,
-                source_map,
-              )
-          }
-        }
+      // Skip empty lines and comments
+      case trimmed == "" || string.starts_with(trimmed, "#") {
+        True ->
+          do_parse_fusion(
+            rest,
+            section,
+            runtime,
+            entry_point,
+            port,
+            minify,
+            source_map,
+            assets_dir,
+            assets_includes,
+          )
         False ->
-          case in_fusion {
+          // Detect section headers
+          case is_section_header(trimmed) {
             True -> {
-              let #(
-                new_runtime,
-                new_entry_point,
-                new_port,
-                new_minify,
-                new_source_map,
-              ) =
-                parse_toml_key_value(
-                  trimmed,
-                  runtime,
-                  entry_point,
-                  port,
-                  minify,
-                  source_map,
-                )
+              let new_section = case trimmed {
+                "[fusion]" -> FusionSection
+                "[fusion.assets]" -> AssetsSection
+                _ -> OtherSection
+              }
               do_parse_fusion(
                 rest,
-                True,
-                new_runtime,
-                new_entry_point,
-                new_port,
-                new_minify,
-                new_source_map,
+                new_section,
+                runtime,
+                entry_point,
+                port,
+                minify,
+                source_map,
+                assets_dir,
+                assets_includes,
               )
             }
             False ->
-              do_parse_fusion(
-                rest,
-                False,
-                runtime,
-                entry_point,
-                port,
-                minify,
-                source_map,
-              )
+              case section {
+                FusionSection -> {
+                  let #(
+                    new_runtime,
+                    new_entry_point,
+                    new_port,
+                    new_minify,
+                    new_source_map,
+                  ) =
+                    parse_fusion_key_value(
+                      trimmed,
+                      runtime,
+                      entry_point,
+                      port,
+                      minify,
+                      source_map,
+                    )
+                  do_parse_fusion(
+                    rest,
+                    section,
+                    new_runtime,
+                    new_entry_point,
+                    new_port,
+                    new_minify,
+                    new_source_map,
+                    assets_dir,
+                    assets_includes,
+                  )
+                }
+                AssetsSection -> {
+                  let #(new_assets_dir, new_includes) =
+                    parse_assets_key_value(trimmed, assets_dir, assets_includes)
+                  do_parse_fusion(
+                    rest,
+                    section,
+                    runtime,
+                    entry_point,
+                    port,
+                    minify,
+                    source_map,
+                    new_assets_dir,
+                    new_includes,
+                  )
+                }
+                OtherSection ->
+                  do_parse_fusion(
+                    rest,
+                    section,
+                    runtime,
+                    entry_point,
+                    port,
+                    minify,
+                    source_map,
+                    assets_dir,
+                    assets_includes,
+                  )
+              }
           }
       }
     }
@@ -224,7 +278,7 @@ fn is_section_header(line: String) -> Bool {
   string.starts_with(line, "[") && string.ends_with(line, "]")
 }
 
-fn parse_toml_key_value(
+fn parse_fusion_key_value(
   line: String,
   runtime: String,
   entry_point: String,
@@ -252,6 +306,44 @@ fn parse_toml_key_value(
     }
     _ -> #(runtime, entry_point, port, minify, source_map)
   }
+}
+
+fn parse_assets_key_value(
+  line: String,
+  directory: String,
+  includes: List(String),
+) -> #(String, List(String)) {
+  case string.split(line, "=") {
+    [key, value] -> {
+      let key = string.trim(key)
+      let value = string.trim(value)
+      case key {
+        "directory" -> #(trim_quotes(value), includes)
+        "includes" -> #(directory, parse_includes_array(value))
+        _ -> #(directory, includes)
+      }
+    }
+    _ -> #(directory, includes)
+  }
+}
+
+/// Parse an array like ["priv/secret.cert", "priv/key.pem"]
+fn parse_includes_array(value: String) -> List(String) {
+  let value = string.trim(value)
+  // Remove brackets
+  let value = case string.starts_with(value, "[") {
+    True -> string.drop_start(value, 1)
+    False -> value
+  }
+  let value = case string.ends_with(value, "]") {
+    True -> string.drop_end(value, 1)
+    False -> value
+  }
+  // Split by comma and trim
+  value
+  |> string.split(",")
+  |> list.map(fn(s) { string.trim(s) |> trim_quotes() })
+  |> list.filter(fn(s) { s != "" })
 }
 
 fn trim_quotes(s: String) -> String {
